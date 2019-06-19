@@ -1,0 +1,14 @@
+package helloworld;
+
+public class myhelloworld {
+
+	public static void main(String[] args) {
+		// TODO 自動產生的方法 Stub
+		System.out.println("Hello World");
+		System.out.print("hello");
+		System.out.print("world");
+		System.out.println("hello");
+		System.out.println("world");
+	}	
+
+}
