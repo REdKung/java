@@ -1,0 +1,43 @@
+package dateymd;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Scanner;
+
+public class dateymd {
+	
+	private static DateFormat df = new SimpleDateFormat("yyyy MM dd");
+
+	public static void main(String[] args) throws ParseException {
+		// TODO 自動產生的方法 Stub
+		int y1, y2, m1, m2, d1, d2, date1, date2;
+		Scanner sc = new Scanner(System.in);
+		System.out.print("計算日期(請用空白間隔)\n請輸入第一組日期(yyyy mm dd):");
+		//y1 = sc.nextInt();
+		//m1 = sc.nextInt();
+		//d1 = sc.nextInt();
+		String first = sc.nextLine();
+		//System.out.printf("已輸入日期 %s年 %s月 %s日\n",y1,m1,d1);
+		System.out.printf("已輸入日期%s\n", first);
+		System.out.print("請輸入第二組日期(yyyy mm dd):");
+		//y2 = sc.nextInt();
+		//m2 = sc.nextInt();
+		//d2 = sc.nextInt();
+		String second = sc.nextLine();
+		//System.out.printf("已輸入日期 %s年 %s月 %s日\n",y2,m2,d2);
+		System.out.printf("已輸入日期%s\n", second);
+		
+		Date one = df.parse(first);
+	    Date two = df.parse(second);
+	    long numberOfDays = daysBetween(one, two);
+	    System.out.printf("兩個日期間隔: %d天", numberOfDays);
+	}
+	
+	private static long daysBetween(Date one, Date two) {
+		// TODO 自動產生的方法 Stub
+		long between = (one.getTime()-two.getTime())/86400000;
+		return Math.abs(between);
+	}
+
+}
