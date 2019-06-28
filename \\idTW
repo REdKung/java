@@ -13,18 +13,18 @@ public class identity {
 		//抓取號碼
 			String id = sc.nextLine();
 			String msg = idCount(id);
-			System.out.printf("已輸入 %s\n", id);
-			System.out.printf("%s\n", msg);
+			System.out.printf("已輸入 %s%n", id);
+			System.out.printf("%s%n", msg);
 		}while(true);
 	}
 	
 	public static String idCount(String id){
 		//識別號碼邏輯正確性
-		String result = "證號不完整\n";
+		String result = "證號不完整";
 		String regex = "[a-zA-Z][0-9]{9}";
 		if(id.matches(regex)) {
 		//英文字母轉出代碼
-			String city[] = {"A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z","I","O"};
+			String []city = {"A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","X","Y","W","Z","I","O"};
 			int cityNumber = -1;
 			String s1 = String.valueOf(Character.toUpperCase(id.charAt(0)));
 			for(int i = 0; i < 26; i++) {
@@ -35,8 +35,8 @@ public class identity {
 			}
 			int [] x = new int [11];
 			String s2 = String.valueOf(cityNumber);
-			int W1 = x[0] = Integer.parseInt(String.valueOf(s2.charAt(0)));
-			int W2 = x[1] = Integer.parseInt(String.valueOf(s2.charAt(1)));
+			x[0] = Integer.parseInt(String.valueOf(s2.charAt(0)));
+			x[1] = Integer.parseInt(String.valueOf(s2.charAt(1)));
 		//分別抓取號碼並加權儲存
 			int total = 0;
 			for(int i = 2; i <= 10; i++)
@@ -46,9 +46,9 @@ public class identity {
 				total += x[0] + x[10];
 		//總數除10要整除輸出true or false
 			if(total % 10 == 0){
-				result = "驗證成功\n";
+				result = "驗證成功";
 			}else {
-				result = "驗證失敗\n";
+				result = "驗證失敗";
 			}
 		}
 		return result;
