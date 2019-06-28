@@ -1,0 +1,32 @@
+package rabbit;
+
+import java.util.Scanner;
+
+public class rabbbit {
+
+	public static void main(String[] args) {
+		// TODO 自動產生的方法 Stub
+		//使用者輸入
+		Scanner sc = new Scanner(System.in);
+		System.out.print("若每兩隻兔子每一個月會生兩隻小兔子，三個月後小兔子也會開始生產，可列出各月總數\n要列出幾各月總數 : ");
+		//抓取輸入
+		int month = sc.nextInt();
+		//建立n個陣列內容
+		int []rabbit = new int [month];
+		rabbit [0] = 2;
+		rabbit [1] = 4;
+		rabbit [2] = 6;
+		rabbit [3] = 8;
+		//計算
+		if(month >= 5) {
+			for (int j=4; j < rabbit.length; j++) {
+				rabbit [j] = rabbit [j-1] + rabbit [j-4];
+			}
+		}
+		//列出陣列內容
+		for (int q:rabbit) {
+			System.out.printf("%d ", q);
+		}
+	}
+
+}
