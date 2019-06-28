@@ -1,0 +1,39 @@
+package poker;
+
+import java.util.*;
+
+public class reshuffle {
+
+	public static void main(String[] args) {
+		// TODO 自動產生的方法 Stub
+		//設定二維陣列，配對存入另一陣列
+		String []fstyle = {"黑桃", "紅心", "方塊", "梅花"};
+		String []pokernum = new String [13];
+		String []poker = new String [52];
+		pokernum[9] = "J";
+		pokernum[10] = "Q";
+		pokernum[11] = "K";
+		pokernum[12] = "A";
+		for(int i=0; i<9; i++){
+			pokernum[i] = String.valueOf(i + 2);
+		}
+		int pokecount = 0;
+		for(int j=0; j<=3; j++) {
+			for(int k=0; k<=12; k++) {
+				poker[pokecount] = fstyle[j] + pokernum[k];
+				pokecount += 1;
+			}
+		}
+		//陣列隨機
+		List list = new ArrayList();
+		for(int i = 0; i < poker.length; i++){
+			list.add(poker[i]);
+		}
+		Collections.shuffle(list);
+		Iterator ite = list.iterator();
+		//列出
+		while(ite.hasNext()){
+		System.out.printf("%s%n",ite.next().toString());
+		}
+	}
+}
