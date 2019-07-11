@@ -1,0 +1,504 @@
+/**
+ * 2017.09.18 iris 
+ * 產出帳號清冊
+ */
+
+package com.egovs.ap;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
+import com.egovs.rpt.JXLAdapter;
+import com.egovs.util.Constant;
+import com.egovs.util.DBUtils;
+import com.egovs.util.FormUtils;
+import com.egovs.util.Auth;
+import com.itextpdf.text.DocumentException;
+
+import fr.opensagres.xdocreport.core.XDocReportException;
+import fr.opensagres.xdocreport.document.IXDocReport;
+import fr.opensagres.xdocreport.document.registry.XDocReportRegistry;
+import fr.opensagres.xdocreport.template.IContext;
+import fr.opensagres.xdocreport.template.TemplateEngineKind;
+import fr.opensagres.xdocreport.template.formatter.FieldsMetadata;
+import jodd.util.StringUtil;
+import jxl.Workbook;
+import jxl.read.biff.BiffException;
+import jxl.write.WritableCell;
+import jxl.write.WritableSheet;
+import jxl.write.WritableWorkbook;
+import jxl.write.WriteException;
+import jxl.write.biff.RowsExceededException;
+
+public class AP0801Rpt extends JXLAdapter {
+
+
+    //連線
+    private Constant constant = new Constant();
+    private DBUtils dbutil = new DBUtils();
+    private FormUtils formutil = new FormUtils();
+
+    /**
+     * 取得對應條件之帳號清冊
+     */
+    public Collection<Map<String, Object>> getRptList() {
+
+        HashMap<String, Object> pars = new HashMap<String, Object>();
+        Collection<Map<String, Object>> sqlValue = null;
+
+
+        String commandSQL = "select account fwms_ldap ";
+        commandSQL += "where account = :account and repkid in(select pkid from fwms_roles where gppkid in(select pkid from fwms_groups where code= 'GP0003' and gov_city = :gov_city))";
+        pars.clear();
+        pars.put("account", "tpcwei");
+        //pars.put("account", user.getAccount());
+        Collection<Map<String, Object>> accountList = dbutil.getsqlValues(commandSQL, pars, constant.getDatasourceName());
+        //System.out.println("commandSQL:"+commandSQL);
+        return accountList;
+
+
+    }
+
+    /**
+     * 輸出excel
+     *
+     * @param request
+     */
+
+    public void outexcel(HttpServletRequest request) {
+
+
+        HashMap<String, Object> pars = new HashMap<String, Object>();
+        //處理表單參數
+        formutil.processParams(request, 0, 0);
+        Map<String, String> param = (Map<String, String>) request.getAttribute("params");
+
+        String govCity = StringUtil.toNotNullString(param.get("govCity"));
+
+        //查詢清冊
+        //initials =N 未失效,且指定效期大於等於系統日期
+        String commandSQL = "select ou,account,name,title,mail,telnumber from fwms_ldap ";
+        if ("".equals(govCity)) {
+            commandSQL += "where initials ='N'";
+        } else {
+            commandSQL += "where ou = :ou and initials ='N'";
+        }
+
+        commandSQL += " AND (use_time_type='Y' OR (use_time_type='N' AND TO_DATE(use_time||'23:59:59','YYYY/MM/DD HH24:MI:SS')>=SYSDATE))";
+        commandSQL += " order by ou";
+        pars.clear();
+
+        if (!"".equals(govCity)) {
+            pars.put("ou", govCity);
+        }
+        Collection<Map<String, Object>> accountList = dbutil.getsqlValues(commandSQL, pars, constant.getDatasourceName());
+        //System.out.println("commandSQL:"+commandSQL);
+
+
+        FWMSUser user = (FWMSUser) request.getSession().getAttribute("User");
+        HttpSession session = request.getSession();
+        ServletContext application = session.getServletContext();
+        String rootPath = StringUtil.toNotNullString(application.getRealPath(""));
+
+
+        try {
+            Workbook book = Workbook.getWorkbook(new File(rootPath + File.separator + "rpt" + File.separator + "temp" + File.separator + "AP0801" + "rpt.xls"));
+            WritableWorkbook workbook = Workbook.createWorkbook(new File(rootPath + File.separator + "rpt" + File.separator + "output" + File.separator + "AP0801" + "_" + user.getAccount() + ".xls"), book);
+
+            WritableCell cell = null;
+            WritableSheet sheet1 = workbook.getSheet(0);
+
+            int y = 2;
+            for (Map<String, Object> map : accountList) {
+
+                //複製樣版
+                copyRange(sheet1, 0, 2, 6, 2, sheet1, 0, y);
+
+                //所屬縣市
+                String ou = StringUtil.toNotNullString(map.get("OU")).replaceAll("ou=", "").replaceAll(",dc=cla,dc=gov,dc=tw", "");
+
+                //標題
+                cell = sheet1.getWritableCell(0, 0);
+                if (!"".equals(govCity)) {
+                    setCellValue(sheet1, cell, ou + "帳號清冊");
+                }
+
+                cell = sheet1.getWritableCell(0, y);
+                setCellValue(sheet1, cell, ou);
+
+                //帳號
+
+                cell = sheet1.getWritableCell(1, y);
+                setCellValue(sheet1, cell, StringUtil.toNotNullString(map.get("ACCOUNT")));
+
+                //姓名
+                cell = sheet1.getWritableCell(2, y);
+                setCellValue(sheet1, cell, StringUtil.toNotNullString(map.get("NAME")));
+
+                //職稱
+                cell = sheet1.getWritableCell(3, y);
+                setCellValue(sheet1, cell, StringUtil.toNotNullString(map.get("TITLE")));
+
+                //EMAIL
+                cell = sheet1.getWritableCell(4, y);
+                setCellValue(sheet1, cell, StringUtil.toNotNullString(map.get("MAIL")));
+
+                //連絡電話
+                cell = sheet1.getWritableCell(5, y);
+                setCellValue(sheet1, cell, StringUtil.toNotNullString(map.get("TELNUMBER")));
+
+                //2018.02.06 iris 增加備註欄位
+                cell = sheet1.getWritableCell(6, y);
+                setCellValue(sheet1, cell, "");
+                //2018.02.06 end
+
+                y++;
+            }
+
+
+            // 存檔名
+            request.setAttribute("excel1", File.separator + "rpt" + File.separator + "output" + File.separator + "AP0801" + "_" + user.getAccount() + ".xls");
+            workbook.write();
+            book.close();
+            workbook.close();
+
+        } catch (BiffException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (RowsExceededException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (WriteException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
+
+    /**
+     * 2018.08.24 iris
+     * 輸出權限清冊
+     *
+     * @param request
+     */
+
+    public String outAuth(HttpServletRequest request) throws DocumentException {
+        FWMSUser user = (FWMSUser) request.getSession().getAttribute("User");
+        HttpSession session = request.getSession();
+        ServletContext application = session.getServletContext();
+        //處理表單參數
+        formutil.processParams(request, 0, 0);
+
+        Map<String, String> param = (Map<String, String>) request.getAttribute("params");
+        String govCity = StringUtil.toNotNullString(param.get("govCity"));
+        String gov = govCity.replaceAll("ou=", "").replaceAll(",dc=cla,dc=gov,dc=tw", "");
+
+        //桃園市轉換
+        if (govCity.indexOf("桃園縣") > 0) {
+            govCity = govCity.replaceAll("桃園縣", "桃園市");
+        }
+
+        //正式機
+        String filePath = StringUtil.toNotNullString(application.getRealPath(""))+"\\rpt\\output\\";
+        //測試機
+        //String filePath = StringUtil.toNotNullString(application.getRealPath("")) + "/rpt/output/";
+
+        //指定檔名
+        String fileName = "AP0801Rpt_"+ user.getAccount() + ".odt";
+
+
+        boolean flag = true;
+        HashMap<String, Object> pars = new HashMap<String, Object>();
+
+        String commandSQL = "SELECT * FROM (SELECT  p.ACCOUNT,p.NAME,p.title,c.NAME group_name,p.initials,b.name AS role_name" +
+                " FROM fwms_ldap p" +
+                " LEFT JOIN fwms_accounts a  ON  p.ACCOUNT = a.ACCOUNT" +
+                " LEFT JOIN fwms_roles b ON a.repkid = b.pkid" +
+                " LEFT JOIN fwms_groups c ON b.gppkid = c.pkid" +
+                " WHERE (p.use_time_type='Y' OR (p.use_time_type='N' AND TO_DATE(p.use_time||'23:59:59','YYYY/MM/DD HH24:MI:SS')>=SYSDATE)) " +
+                " AND p.ou=:govCity AND p.initials='N')" +
+                " GROUP BY ACCOUNT,NAME,title,group_name,initials,role_name" +
+                " ORDER BY ACCOUNT,group_name";
+       /* String commandSQL2 = "SELECT b.NAME as role_name," +
+                " DECODE(selauth,'1','有','無') s,DECODE(addauth,'1','有','無') a,DECODE(updauth,'1','有','無') u,DECODE(delauth,'1','有','無')  d  " +
+                " FROM fwms_ldap p" +
+                " LEFT JOIN fwms_accounts a  ON  p.ACCOUNT = a.ACCOUNT" +
+                " LEFT JOIN fwms_roles b ON a.repkid = b.pkid" +
+                " LEFT JOIN fwms_groups c ON b.gppkid = c.pkid" +
+                " LEFT JOIN fwms_authority au ON  au.repkid = b.pkid" +
+                " WHERE p.ou=:govCity" +
+                " GROUP BY b.NAME,selauth,addauth,updauth,delauth" +
+                " ORDER by b.name";*/
+        String commandSQL2 = "SELECT role_name,father,s,a,u,d FROM ("+
+                "SELECT role_name,father,s,a,u,d FROM ("+
+                " SELECT b.NAME as role_name,au.sfpkid," +
+                " DECODE(selauth,'1','有','無') s,DECODE(addauth,'1','有','無') a,DECODE(updauth,'1','有','無') u,DECODE(delauth,'1','有','無')  d  " +
+                " FROM fwms_ldap p" +
+                " LEFT JOIN fwms_accounts a  ON  p.ACCOUNT = a.ACCOUNT" +
+                " LEFT JOIN fwms_roles b ON a.repkid = b.pkid" +
+                " LEFT JOIN fwms_groups c ON b.gppkid = c.pkid" +
+                " LEFT JOIN fwms_authority au ON  au.repkid = b.pkid" +
+                " WHERE p.ou=:govCity" +
+                " GROUP BY b.NAME,selauth,addauth,updauth,delauth,au.sfpkid" +
+                " ORDER BY b.NAME) LEFT JOIN fwms_sysfunction sys"+
+                " ON sys.pkid = sfpkid)"+
+                " GROUP BY role_name,father,s,a,u,d"+
+                " ORDER BY role_name,father";
+
+        pars.clear();
+        pars.put("govCity", govCity);
+        Collection<Map<String, Object>> groupList = dbutil.getsqlValues(commandSQL, pars, constant.getDatasourceName());
+
+
+        if (dbutil.runUpdateSql(commandSQL, pars, constant.getDatasourceName()) > 0) {
+            flag = true;
+        }
+
+        Collection<Map<String, Object>> authList = dbutil.getsqlValues(commandSQL2, pars, constant.getDatasourceName());
+        if (dbutil.runUpdateSql(commandSQL2, pars, constant.getDatasourceName()) > 0) {
+            flag = true;
+        }
+
+        int i = 0;
+        List<Map<String, Object>> fal = new ArrayList<Map<String, Object>>();
+        List<Map<String, Object>> fal2 = new ArrayList<Map<String, Object>>();
+        Map<String, Object> tmp = new HashMap<String, Object>();
+        Map<String, Object> tmp2 = new HashMap<String, Object>();
+        Map<String, Object> map2 = new HashMap<String, Object>();
+
+        //帳號清冊
+        int j = 0;
+        for (Map<String, Object> map : groupList) {
+            if (tmp.isEmpty()) {
+                tmp = map;
+
+            } else {
+                if (tmp.get("ACCOUNT").equals(map.get("ACCOUNT"))) {
+                    //不同的group_name才合併
+                    if (!map2.get("GROUP_NAME").equals(map.get("GROUP_NAME"))) {
+                        String grp = tmp.get("GROUP_NAME").toString();
+                        tmp.put("GROUP_NAME", (grp + "\r\n" + map.get("GROUP_NAME")));
+                    }
+                    if (!map2.get("ROLE_NAME").equals(map.get("ROLE_NAME"))) {
+                        String role = tmp.get("ROLE_NAME").toString();
+                        tmp.put("ROLE_NAME", (role + "\r\n" + map.get("ROLE_NAME")));
+                    }
+                } else {
+                    fal.add(j, tmp);
+                    j++;
+                    tmp = map;
+                }
+            }
+            map2 = map;
+        }
+        fal.add(tmp);
+
+
+
+        //查詢、新增、刪除、修改權限收合(同角色名稱，只要其中一個權限為有，則為有)
+        int k = 0;
+        String father="";//父類別功能
+        for (Map<String, Object> map : authList) {
+            String fun = "";
+            String sel = map.get("S").toString();
+            String add = map.get("A").toString();
+            String upd = map.get("U").toString();
+            String del = map.get("D").toString();
+
+
+            if (tmp2.isEmpty()) {
+                father="";
+                tmp2 = map;
+                tmp2.put("SELECT", sel);
+                tmp2.put("ADD", add);
+                tmp2.put("UPDATE", upd);
+                tmp2.put("DELETE", del);
+
+            } else {
+                if (!"".equals(StringUtil.toNotNullString(map.get("ROLE_NAME")))) {
+                    if (tmp2.get("ROLE_NAME").equals(map.get("ROLE_NAME"))) {
+                        father += map.get("FATHER")+",";
+                        if ("有".equals(sel)) {
+                            tmp2.put("SELECT", sel);
+                        }
+                        if ("有".equals(add)) {
+                            tmp2.put("ADD", add);
+                        }
+
+                        if ("有".equals(upd)) {
+                            tmp2.put("UPDATE", upd);
+                        }
+
+                        if ("有".equals(del)) {
+                            tmp2.put("DELETE", del);
+                        }
+                    } else {
+                        fal2.add(k, tmp2);
+                        k++;
+                        tmp2 = map;
+                        tmp2.put("SELECT", sel);
+                        tmp2.put("ADD", add);
+                        tmp2.put("UPDATE", upd);
+                        tmp2.put("DELETE", del);
+                        father="";
+                    }
+                    //System.out.println("name="+authdescribe(father, fun));
+                    //tmp.put("SYSFUN_NAME", authdescribe(father, fun));
+                    //tmp.put("FATHER",father);
+                }
+
+            }
+            tmp2.put("SYSFUN_NAME", authdescribe(father, fun));
+            map2 = map;
+        }
+        fal2.add(tmp2);
+
+
+        try {
+            // 1) 讀取範本檔
+            InputStream in = AP0801Rpt.class.getResourceAsStream("./template/A0801_2Rpt.odt");
+
+            IXDocReport report = XDocReportRegistry.getRegistry().loadReport(in, TemplateEngineKind.Velocity);
+
+            // 2) Create context Java model
+            IContext context = report.createContext();
+
+            //1.帳號清冊結果
+            List list = new ArrayList(); //查詢結果的集合
+            for (Map<String, Object> map : fal) {
+                Auth authForm = new Auth();
+                authForm.setAccount(StringUtil.toNotNullString(map.get("ACCOUNT")));
+                authForm.setName(StringUtil.toNotNullString(map.get("NAME")));
+                authForm.setTitle(StringUtil.toNotNullString(map.get("TITLE")));
+                authForm.setUnit(StringUtil.toNotNullString(map.get("UNIT")));
+                authForm.setGroupname(StringUtil.toNotNullString(map.get("GROUP_NAME")));
+                authForm.setRolename(StringUtil.toNotNullString(map.get("ROLE_NAME")));
+                //String auth = StringUtil.toNotNullString(map.get("SELECT")) +  StringUtil.toNotNullString(map.get("ADD"))+StringUtil.toNotNullString(map.get("UPDATE")) +StringUtil.toNotNullString(map.get("DELETE"));
+                //authForm.setAuth(auth);
+                String initials = "";
+                if ("Y".equals(StringUtil.toNotNullString(map.get("INITIALS")))) {
+                    initials = "已停權";
+                }
+                authForm.setNote(initials);
+                list.add(authForm);
+
+            }
+
+            //2.角色清冊結果
+            List list2 = new ArrayList(); //查詢結果的集合
+            for (Map<String, Object> map : fal2) {
+                Auth authForm = new Auth();
+                authForm.setRolename(StringUtil.toNotNullString(map.get("ROLE_NAME")));
+                authForm.setUnit(gov);
+                String auth = StringUtil.toNotNullString(map.get("SELECT")) + StringUtil.toNotNullString(map.get("ADD")) + StringUtil.toNotNullString(map.get("UPDATE")) + StringUtil.toNotNullString(map.get("DELETE"));
+                authForm.setAuth(auth);
+                authForm.setSysfunname(StringUtil.toNotNullString(map.get("SYSFUN_NAME")));
+                list2.add(authForm);
+
+            }
+
+
+            //word繞迴圈使用(群組內容)
+            FieldsMetadata metadata = new FieldsMetadata();
+            metadata.addFieldAsList("groupResult.account");
+            metadata.addFieldAsList("groupResult.name");
+            metadata.addFieldAsList("groupResult.title");
+            metadata.addFieldAsList("groupResult.groupname");
+            metadata.addFieldAsList("groupResult.rolename");
+            metadata.addFieldAsList("groupResult.note");
+            metadata.addFieldAsList("authResult.rolename");
+            metadata.addFieldAsList("authResult.unit");
+            metadata.addFieldAsList("authResult.auth");
+            metadata.addFieldAsList("authResult.sysfunname");
+            report.setFieldsMetadata(metadata);
+
+
+            /*DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+            LocalDateTime now = LocalDateTime.now();*/
+            DateFormat df = new SimpleDateFormat("yyyy/MM/dd");
+            Date date = new Date();
+            context.put("groupResult", list);
+            context.put("authResult", list2);
+            context.put("createuser", user.getName());
+            context.put("ou", gov);
+            context.put("date", df.format(date));
+
+            // 3) Generate report by merging Java model with the ODT
+            OutputStream out = new FileOutputStream(new File(filePath + fileName));
+            //OutputStream output = new FileOutputStream(new File(application.getRealPath("/rpt/output/"+user.getAccount()+".pdf")));
+            //report.process(context, output);
+            //File file = new File(filePath + fileName);
+
+            report.process(context, out);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (XDocReportException e) {
+            e.printStackTrace();
+        }
+
+        return filePath + fileName;
+
+    }
+
+    /**
+     * 2018.09.11 iris 根據父類別名稱，讀取對應之子系統
+     * @param fatherName
+     * @param functionName
+     * @return
+     */
+
+    private String authdescribe(String fatherName, String functionName) {
+
+        /*Map<String, Object> functionMap = new HashMap<String, Object>();
+        functionMap.put("系統管理員", "入國通報管理,查察作業管理,終止聘僱管理,爭議諮詢管理,無違反勞工法令,檢舉交查管理");
+        functionMap.put("主管", "入國通報管理,查察作業管理,終止聘僱管理,爭議諮詢管理,無違反勞工法令,檢舉交查管理");
+        functionMap.put("管理", "入國通報管理,查察作業管理,終止聘僱管理,爭議諮詢管理,無違反勞工法令,檢舉交查管理");
+        functionMap.put("入國", "入國通報管理");
+        functionMap.put("查詢", "入國通報管理");
+        functionMap.put("查察", "查察作業管理");
+        functionMap.put("解約", "終止聘僱管理");
+        functionMap.put("終止", "終止聘僱管理");
+        functionMap.put("爭議", "爭議諮詢管理");
+        functionMap.put("諮詢", "爭議諮詢管理");
+        functionMap.put("無違反", "無違反勞工法令");
+        functionMap.put("檢舉", "檢舉交查管理");
+        functionMap.put("交辦", "檢舉交查管理");*/
+        Map<String, Object> functionMap = new HashMap<String, Object>();
+        functionMap.put("AP02", "外籍勞工/雇主資料管理");
+        functionMap.put("AP03", "入國通報管理");
+        functionMap.put("AP04", "查察作業管理 ");
+        functionMap.put("AP05", " 終止聘僱管理 ");
+        functionMap.put("AP06", " 爭議/諮詢管理 ");
+        functionMap.put("AP07", " 無違反勞工法令管理 ");
+        functionMap.put("AP25", "檢舉／交查案件管理 ");
+
+
+        for (Object key : functionMap.keySet()) {
+            if ((fatherName).contains(key.toString())) {
+                functionName += functionMap.get(key)+",";
+            }
+
+        }
+        //tmp.put("SYSFUN_NAME",functionName);
+        //System.out.println("name=" + roleName + "#function:" + functionName);
+        //System.out.println("functionName=" + functionName);
+
+        return functionName;
+    }
+}
